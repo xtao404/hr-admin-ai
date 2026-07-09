@@ -3,6 +3,14 @@
     <el-card class="query-card">
       <template #header>管理者决策支持</template>
       <p class="desc">用自然语言提问，系统将从 HR 系统拉取数据并生成分析报告</p>
+      <el-alert
+        v-if="isDepartmentScoped"
+        title="当前角色为部门经理，生成的报告仅基于本部门可访问数据，不代表全公司口径。"
+        type="warning"
+        :closable="false"
+        show-icon
+        style="margin-top: 12px"
+      />
       <div class="quick-queries">
         <el-tag
           v-for="q in quickQueries"
@@ -73,13 +81,16 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import { analyticsApi } from '../api'
 import { marked } from 'marked'
+import { useUserStore } from '../stores/user'
 
+const userStore = useUserStore()
 const loading = ref(false)
 const report = ref(null)
 const form = reactive({ query: '', period: '上季度' })
+const isDepartmentScoped = computed(() => userStore.userInfo?.role === 'MANAGER')
 
 const quickQueries = [
   '帮我统计上季度部门加班时长',

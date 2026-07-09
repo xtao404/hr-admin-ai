@@ -9,23 +9,31 @@
           show-icon
           style="margin-bottom: 16px"
         />
+        <el-alert
+          v-if="isDepartmentScoped"
+          title="当前角色为部门经理，离职风险、技能缺口等统计默认仅展示本部门可访问范围；招聘质量分析为通用岗位画像，不代表本部门独占数据。"
+          type="warning"
+          :closable="false"
+          show-icon
+          style="margin-bottom: 16px"
+        />
       </el-col>
       <el-col :span="8">
         <el-card shadow="hover" class="stat-card danger">
           <div class="stat-value">{{ dashboard.highRiskEmployeeCount }}</div>
-          <div class="stat-label">高风险离职预警</div>
+          <div class="stat-label">{{ isDepartmentScoped ? '本部门高风险离职预警' : '高风险离职预警' }}</div>
         </el-card>
       </el-col>
       <el-col :span="8">
         <el-card shadow="hover" class="stat-card warning">
           <div class="stat-value">{{ dashboard.skillGapCount }}</div>
-          <div class="stat-label">技能缺口岗位</div>
+          <div class="stat-label">{{ isDepartmentScoped ? '本部门技能缺口岗位' : '技能缺口岗位' }}</div>
         </el-card>
       </el-col>
       <el-col :span="8">
         <el-card shadow="hover" class="stat-card success">
           <div class="stat-value">{{ (dashboard.avgRecruitmentSuccessRate * 100).toFixed(0) }}%</div>
-          <div class="stat-label">招聘成功率</div>
+          <div class="stat-label">{{ isDepartmentScoped ? '通用招聘成功率画像' : '招聘成功率' }}</div>
         </el-card>
       </el-col>
     </el-row>
@@ -122,11 +130,13 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { analyticsApi, actionApi } from '../api'
 import EmployeeProfileDrawer from '../components/EmployeeProfileDrawer.vue'
+import { useUserStore } from '../stores/user'
 
+const userStore = useUserStore()
 const dashboard = ref({
   highRiskEmployeeCount: 0,
   skillGapCount: 0,
@@ -137,6 +147,7 @@ const skillGaps = ref([])
 const recruitmentList = ref([])
 const profileVisible = ref(false)
 const selectedEmployee = ref(null)
+const isDepartmentScoped = computed(() => userStore.userInfo?.role === 'MANAGER')
 
 onMounted(async () => {
   const [dash, turnover, gaps, recruitment] = await Promise.all([
