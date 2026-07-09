@@ -8,15 +8,22 @@
     </div>
     <el-collapse-transition>
       <div v-show="expanded" class="trace-body">
-        <div class="trace-row">
+        <div v-if="trace.progressMessage || trace.stageLabel" class="thinking-box">
+          <div class="thinking-title">
+            <span>{{ statusLabel }}</span>
+            <el-tag v-if="trace.stageLabel" size="small" effect="plain">{{ trace.stageLabel }}</el-tag>
+          </div>
+          <div v-if="trace.progressMessage" class="thinking-message">{{ trace.progressMessage }}</div>
+        </div>
+        <div v-if="trace.intentLabel || trace.intent" class="trace-row">
           <span class="label">意图识别</span>
           <span>{{ trace.intentLabel || trace.intent }}</span>
         </div>
-        <div class="trace-row">
+        <div v-if="trace.dataSource" class="trace-row">
           <span class="label">数据来源</span>
           <span>{{ trace.dataSource }}</span>
         </div>
-        <div class="trace-row">
+        <div v-if="trace.queryMethod" class="trace-row">
           <span class="label">查询方式</span>
           <span>{{ methodLabel }}</span>
         </div>
@@ -24,7 +31,7 @@
           <span class="label">结果行数</span>
           <span>{{ trace.rowCount }} 行</span>
         </div>
-        <div class="trace-row">
+        <div v-if="trace.permissionNote" class="trace-row">
           <span class="label">权限说明</span>
           <span>{{ trace.permissionNote }}</span>
         </div>
@@ -60,13 +67,19 @@ const routeLabel = computed(() => ({
   KNOWLEDGE: '知识库 RAG',
   PRESET_QUERY: '预设查询',
   TEXT_TO_SQL: 'Text-to-SQL'
-}[props.trace?.routeType] || '未知'))
+}[props.trace?.routeType] || '处理中'))
 
 const routeTagType = computed(() => ({
   KNOWLEDGE: 'success',
   PRESET_QUERY: 'warning',
   TEXT_TO_SQL: 'danger'
 }[props.trace?.routeType] || 'info'))
+
+const statusLabel = computed(() => ({
+  THINKING: 'AI 思考中',
+  ANSWERING: 'AI 正在回答',
+  DONE: 'AI 已完成'
+}[props.trace?.status] || '处理进度'))
 
 const methodLabel = computed(() => ({
   rag: '向量/关键词检索',
@@ -107,6 +120,30 @@ const methodLabel = computed(() => ({
 
 .trace-body {
   padding: 0 12px 12px;
+}
+
+.thinking-box {
+  margin: 4px 0 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #f3f6ff;
+  border: 1px solid #dbe7ff;
+}
+
+.thinking-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #3156d3;
+}
+
+.thinking-message {
+  font-size: 12px;
+  line-height: 1.6;
+  color: #4b5563;
 }
 
 .trace-row {
