@@ -36,7 +36,12 @@
       <template #header>
         <div class="report-header">
           <span>{{ report.reportTitle }}</span>
-          <el-tag type="success" size="small">实时数据</el-tag>
+          <div class="header-actions">
+            <el-tag type="success" size="small">实时数据</el-tag>
+            <el-button size="small" @click="exportReport">
+              <el-icon><Download /></el-icon> 导出 Markdown
+            </el-button>
+          </div>
         </div>
       </template>
 
@@ -109,6 +114,31 @@ function trendType(trend) {
   if (trend?.includes('↓')) return 'success'
   return 'info'
 }
+
+function exportReport() {
+  if (!report.value) return
+  const r = report.value
+  let md = `# ${r.reportTitle}\n\n`
+  md += `> ${r.summary}\n\n`
+  md += `## 核心指标\n\n`
+  for (const m of r.metrics || []) {
+    md += `- **${m.name}**: ${m.value}${m.unit || ''} ${m.trend || ''}\n`
+  }
+  md += `\n## 详细分析\n\n${r.detail || ''}\n`
+  if (r.dataSources?.length) {
+    md += `\n## 数据来源\n\n`
+    for (const s of r.dataSources) {
+      md += `- ${s.title}\n`
+    }
+  }
+  const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `${r.reportTitle || 'HR报告'}.md`
+  a.click()
+  URL.revokeObjectURL(url)
+}
 </script>
 
 <style scoped>
@@ -136,6 +166,12 @@ function trendType(trend) {
   display: flex;
   align-items: center;
   justify-content: space-between;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .metrics-row {

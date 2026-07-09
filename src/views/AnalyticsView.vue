@@ -1,6 +1,15 @@
 <template>
   <div class="analytics-page">
     <el-row :gutter="20" class="stat-cards">
+      <el-col :span="24">
+        <el-alert
+          title="预测分析基于绩效、考勤、满意度等多维特征（演示模型），生产环境可对接 XGBoost / 随机森林等 ML 服务。"
+          type="info"
+          :closable="false"
+          show-icon
+          style="margin-bottom: 16px"
+        />
+      </el-col>
       <el-col :span="8">
         <el-card shadow="hover" class="stat-card danger">
           <div class="stat-value">{{ dashboard.highRiskEmployeeCount }}</div>
@@ -31,7 +40,11 @@
             </div>
           </template>
           <el-table :data="turnoverList" stripe size="small">
-            <el-table-column prop="employeeName" label="员工" width="80" />
+            <el-table-column label="员工" width="90">
+              <template #default="{ row }">
+                <el-link type="primary" @click="openEmployee(row)">{{ row.employeeName }}</el-link>
+              </template>
+            </el-table-column>
             <el-table-column prop="departmentName" label="部门" width="110" />
             <el-table-column label="风险分" width="80">
               <template #default="{ row }">
@@ -46,6 +59,11 @@
               </template>
             </el-table-column>
             <el-table-column prop="recommendation" label="建议" show-overflow-tooltip />
+            <el-table-column label="操作" width="90" fixed="right">
+              <template #default="{ row }">
+                <el-button size="small" type="danger" plain @click="createRetentionTask(row)">挽留</el-button>
+              </template>
+            </el-table-column>
           </el-table>
         </el-card>
       </el-col>
@@ -95,11 +113,19 @@
       </el-row>
     </el-card>
   </div>
+
+  <EmployeeProfileDrawer
+    :visible="profileVisible"
+    :employee="selectedEmployee"
+    @close="profileVisible = false"
+  />
 </template>
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { analyticsApi } from '../api'
+import { ElMessage } from 'element-plus'
+import { analyticsApi, actionApi } from '../api'
+import EmployeeProfileDrawer from '../components/EmployeeProfileDrawer.vue'
 
 const dashboard = ref({
   highRiskEmployeeCount: 0,
@@ -109,6 +135,8 @@ const dashboard = ref({
 const turnoverList = ref([])
 const skillGaps = ref([])
 const recruitmentList = ref([])
+const profileVisible = ref(false)
+const selectedEmployee = ref(null)
 
 onMounted(async () => {
   const [dash, turnover, gaps, recruitment] = await Promise.all([
@@ -136,6 +164,22 @@ function riskTagType(level) {
 function riskLabel(level) {
   const map = { LOW: '低', MEDIUM: '中', HIGH: '高', CRITICAL: '极高' }
   return map[level] || level
+}
+
+function openEmployee(row) {
+  selectedEmployee.value = { employeeId: row.employeeId, name: row.employeeName }
+  profileVisible.value = true
+}
+
+async function createRetentionTask(row) {
+  const res = await actionApi.createTask({
+    actionType: 'RETENTION',
+    employeeId: row.employeeId,
+    employeeName: row.employeeName,
+    title: `安排 ${row.employeeName} 离职风险面谈`,
+    description: row.recommendation || '建议尽快安排 1v1 面谈并制定挽留方案。'
+  })
+  ElMessage.success(res.message)
 }
 </script>
 

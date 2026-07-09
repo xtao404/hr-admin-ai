@@ -5,6 +5,11 @@
         <el-icon :size="40" color="#4f6ef7"><Cpu /></el-icon>
         <h1>HR AI 智能平台</h1>
         <p>智能问答 · 预测分析 · 决策支持</p>
+        <ul class="value-points">
+          <li>一个对话框：制度问答 + 实时查数 + Text-to-SQL</li>
+          <li>管理者：预测预警、图表可视化、决策报告</li>
+          <li>企业级：RBAC 权限、问数溯源、行动建议闭环</li>
+        </ul>
       </div>
 
       <el-form ref="formRef" :model="form" :rules="rules" @submit.prevent="handleLogin">
@@ -104,6 +109,16 @@ async function handleLogin() {
 .login-header p {
   color: #999;
   font-size: 14px;
+  margin-bottom: 8px;
+}
+
+.value-points {
+  text-align: left;
+  margin: 12px 0 0;
+  padding-left: 18px;
+  font-size: 12px;
+  color: #666;
+  line-height: 1.8;
 }
 
 .login-btn {

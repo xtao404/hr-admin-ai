@@ -1,8 +1,13 @@
 <template>
   <div class="chat-container">
+    <HeroDemoGuide ref="demoGuideRef" @start-demo="handleDemoStart" />
+
     <div class="chat-sidebar">
       <el-button type="primary" class="new-chat-btn" @click="startNewChat">
         <el-icon><Plus /></el-icon> 新对话
+      </el-button>
+      <el-button class="demo-btn" text @click="showDemoAgain">
+        <el-icon><Guide /></el-icon> 演示引导
       </el-button>
       <div class="session-list">
         <div
@@ -22,7 +27,7 @@
         <div v-if="messages.length === 0" class="welcome">
           <el-icon :size="48" color="#4f6ef7"><ChatDotRound /></el-icon>
           <h2>HR 智能助手</h2>
-          <p>支持制度问答（知识库）与业务数据查询（MySQL）</p>
+          <p>支持制度问答、业务数据查询、Text-to-SQL 分析与图表可视化</p>
           <div class="quick-questions">
             <el-tag
               v-for="q in quickQuestions"
@@ -46,30 +51,36 @@
           </div>
           <div class="message-body">
             <div class="message-content" v-html="formatContent(msg.content)"></div>
+            <ChatTracePanel
+              v-if="msg.trace"
+              :trace="msg.trace"
+              @view-employee="openEmployee"
+            />
             <div v-if="msg.charts?.length" class="message-charts">
               <ChatChart v-for="(chart, idx) in msg.charts" :key="idx" :config="chart" />
             </div>
+            <ActionSuggestionPanel :actions="msg.actions" />
             <div v-if="msg.sources?.length" class="message-sources">
               <p class="sources-title">参考来源：</p>
               <el-tag
-                v-for="src in msg.sources"
-                :key="src.documentId"
+                v-for="(src, idx) in msg.sources"
+                :key="src.documentId || idx"
                 size="small"
                 type="info"
                 class="source-tag"
-              >{{ src.title }} ({{ (src.relevance * 100).toFixed(0) }}%)</el-tag>
+              >{{ src.title }}<template v-if="src.relevance"> ({{ (src.relevance * 100).toFixed(0) }}%)</template></el-tag>
             </div>
           </div>
         </div>
 
-        <div v-if="loading" class="message assistant">
+        <div v-if="streaming" class="message assistant">
           <div class="message-avatar">
             <el-avatar :size="36" style="background: #10b981">AI</el-avatar>
           </div>
           <div class="message-body">
-            <div class="typing-indicator">
-              <span></span><span></span><span></span>
-            </div>
+            <div class="message-content" v-html="formatContent(streamContent)"></div>
+            <ChatTracePanel v-if="streamTrace" :trace="streamTrace" @view-employee="openEmployee" />
+            <span v-if="streaming" class="stream-cursor">|</span>
           </div>
         </div>
       </div>
@@ -82,11 +93,17 @@
           placeholder="输入您的问题，如：年假有多少天？我的假期余额是多少？"
           @keyup.ctrl.enter="sendMessage"
         />
-        <el-button type="primary" :loading="loading" :disabled="!inputText.trim()" @click="sendMessage">
+        <el-button type="primary" :loading="loading" :disabled="!inputText.trim() || streaming" @click="sendMessage">
           发送
         </el-button>
       </div>
     </div>
+
+    <EmployeeProfileDrawer
+      :visible="profileVisible"
+      :employee="selectedEmployee"
+      @close="profileVisible = false"
+    />
   </div>
 </template>
 
@@ -96,6 +113,10 @@ import { chatApi } from '../api'
 import { useUserStore } from '../stores/user'
 import { marked } from 'marked'
 import ChatChart from '../components/ChatChart.vue'
+import ChatTracePanel from '../components/ChatTracePanel.vue'
+import ActionSuggestionPanel from '../components/ActionSuggestionPanel.vue'
+import EmployeeProfileDrawer from '../components/EmployeeProfileDrawer.vue'
+import HeroDemoGuide from '../components/HeroDemoGuide.vue'
 
 const userStore = useUserStore()
 const sessions = ref([])
@@ -103,7 +124,13 @@ const messages = ref([])
 const currentSessionId = ref(null)
 const inputText = ref('')
 const loading = ref(false)
+const streaming = ref(false)
+const streamContent = ref('')
+const streamTrace = ref(null)
 const messagesRef = ref()
+const profileVisible = ref(false)
+const selectedEmployee = ref(null)
+const demoGuideRef = ref()
 
 const quickQuestions = computed(() => {
   const common = ['年假有多少天？', '我的假期余额是多少？', '五险一金包括哪些？']
@@ -143,35 +170,89 @@ function sendQuestion(q) {
   sendMessage()
 }
 
+function handleDemoStart(query) {
+  sendQuestion(query)
+}
+
+function showDemoAgain() {
+  demoGuideRef.value?.open()
+}
+
+function openEmployee(emp) {
+  selectedEmployee.value = emp
+  profileVisible.value = true
+}
+
 async function sendMessage() {
   const question = inputText.value.trim()
-  if (!question || loading.value) return
+  if (!question || loading.value || streaming.value) return
 
-  messages.value.push({
-    id: Date.now(),
-    role: 'user',
-    content: question
-  })
+  messages.value.push({ id: Date.now(), role: 'user', content: question })
   inputText.value = ''
   loading.value = true
+  streaming.value = true
+  streamContent.value = ''
+  streamTrace.value = null
   scrollToBottom()
 
+  let answered = false
+
   try {
-    const res = await chatApi.ask({
-      question,
-      sessionId: currentSessionId.value
-    })
-    currentSessionId.value = res.sessionId
-    messages.value.push({
-      id: Date.now() + 1,
-      role: 'assistant',
-      content: res.answer,
-      sources: res.sources,
-      charts: res.charts
-    })
-    await loadSessions()
+    await chatApi.askStream(
+      { question, sessionId: currentSessionId.value },
+      {
+        onTrace: (trace) => {
+          streamTrace.value = trace
+          scrollToBottom()
+        },
+        onChunk: (chunk) => {
+          streamContent.value += chunk
+          scrollToBottom()
+        },
+        onDone: (res) => {
+          answered = true
+          currentSessionId.value = res.sessionId
+          messages.value.push({
+            id: Date.now() + 1,
+            role: 'assistant',
+            content: res.answer,
+            sources: res.sources,
+            charts: res.charts,
+            trace: res.trace,
+            actions: res.actions
+          })
+          loadSessions()
+          scrollToBottom()
+        },
+        onError: (err) => {
+          throw new Error(typeof err === 'string' ? err : '流式回答失败')
+        }
+      }
+    )
+  } catch {
+    if (!answered) {
+      try {
+        const res = await chatApi.ask({ question, sessionId: currentSessionId.value })
+        currentSessionId.value = res.sessionId
+        messages.value.push({
+          id: Date.now() + 1,
+          role: 'assistant',
+          content: res.answer,
+          sources: res.sources,
+          charts: res.charts,
+          trace: res.trace,
+          actions: res.actions
+        })
+        await loadSessions()
+      } catch {
+        // 错误已由 axios 拦截器提示
+      }
+    }
   } finally {
     loading.value = false
+    streaming.value = false
+    streamContent.value = ''
+    streamTrace.value = null
     scrollToBottom()
   }
 }
@@ -209,7 +290,13 @@ function scrollToBottom() {
 
 .new-chat-btn {
   width: 100%;
+  margin-bottom: 8px;
+}
+
+.demo-btn {
+  width: 100%;
   margin-bottom: 16px;
+  justify-content: flex-start;
 }
 
 .session-list {
@@ -318,28 +405,16 @@ function scrollToBottom() {
   margin-bottom: 4px;
 }
 
-.typing-indicator {
-  display: flex;
-  gap: 4px;
-  padding: 12px 16px;
-  background: #f5f7fa;
-  border-radius: 12px;
+.stream-cursor {
+  display: inline-block;
+  animation: blink 1s infinite;
+  color: #10b981;
+  font-weight: bold;
 }
 
-.typing-indicator span {
-  width: 8px;
-  height: 8px;
-  background: #999;
-  border-radius: 50%;
-  animation: bounce 1.4s infinite;
-}
-
-.typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
-.typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
-
-@keyframes bounce {
-  0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
-  40% { transform: scale(1); opacity: 1; }
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
 }
 
 .chat-input {
