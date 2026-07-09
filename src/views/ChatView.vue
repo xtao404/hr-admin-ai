@@ -46,6 +46,9 @@
           </div>
           <div class="message-body">
             <div class="message-content" v-html="formatContent(msg.content)"></div>
+            <div v-if="msg.charts?.length" class="message-charts">
+              <ChatChart v-for="(chart, idx) in msg.charts" :key="idx" :config="chart" />
+            </div>
             <div v-if="msg.sources?.length" class="message-sources">
               <p class="sources-title">参考来源：</p>
               <el-tag
@@ -92,6 +95,7 @@ import { ref, computed, onMounted, nextTick } from 'vue'
 import { chatApi } from '../api'
 import { useUserStore } from '../stores/user'
 import { marked } from 'marked'
+import ChatChart from '../components/ChatChart.vue'
 
 const userStore = useUserStore()
 const sessions = ref([])
@@ -162,7 +166,8 @@ async function sendMessage() {
       id: Date.now() + 1,
       role: 'assistant',
       content: res.answer,
-      sources: res.sources
+      sources: res.sources,
+      charts: res.charts
     })
     await loadSessions()
   } finally {
@@ -290,6 +295,12 @@ function scrollToBottom() {
   line-height: 1.6;
   max-width: 70%;
   font-size: 14px;
+}
+
+.message-charts {
+  margin-top: 8px;
+  max-width: 85%;
+  min-width: 360px;
 }
 
 .message-sources {
