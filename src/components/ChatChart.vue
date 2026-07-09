@@ -1,6 +1,7 @@
 <template>
   <div class="chat-chart-wrapper">
     <div class="chart-title">{{ config.title }}</div>
+    <div v-if="config.subtitle" class="chart-subtitle">{{ config.subtitle }}</div>
     <div ref="chartRef" class="chat-chart"></div>
   </div>
 </template>
@@ -18,6 +19,8 @@ let chartInstance = null
 
 function buildOption(config) {
   const colors = ['#4f6ef7', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4']
+  const unit = config.valueUnit || ''
+  const seriesName = config.series?.[0]?.name || '数值'
 
   if (config.type === 'pie') {
     const data = config.labels.map((label, i) => ({
@@ -26,14 +29,19 @@ function buildOption(config) {
     }))
     return {
       color: colors,
-      tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
+      tooltip: {
+        trigger: 'item',
+        formatter: (params) => `${params.name}<br/>${seriesName}: ${params.value}${unit}<br/>占全部合计: ${params.percent}%`
+      },
       legend: { bottom: 0, type: 'scroll' },
       series: [{
         type: 'pie',
         radius: ['35%', '65%'],
         center: ['50%', '45%'],
         data,
-        label: { formatter: '{b}\n{d}%' }
+        label: {
+          formatter: (params) => `${params.name}\n${params.value}${unit}\n占${params.percent}%`
+        }
       }]
     }
   }
@@ -44,12 +52,25 @@ function buildOption(config) {
     data: s.data,
     smooth: config.type === 'line',
     itemStyle: { color: colors[i % colors.length] },
-    barMaxWidth: 40
+    barMaxWidth: 40,
+    label: config.series.length === 1 ? {
+      show: true,
+      position: 'top',
+      formatter: (params) => `${params.value}${unit}`
+    } : undefined
   }))
 
   return {
     color: colors,
-    tooltip: { trigger: 'axis' },
+    tooltip: {
+      trigger: 'axis',
+      formatter: (params) => {
+        if (!Array.isArray(params)) return ''
+        const header = params[0]?.axisValue ?? ''
+        const lines = params.map(p => `${p.marker}${p.seriesName}: ${p.value}${unit}`)
+        return [header, ...lines].join('<br/>')
+      }
+    },
     legend: config.series.length > 1 ? { bottom: 0 } : undefined,
     grid: { left: 48, right: 24, top: 24, bottom: config.series.length > 1 ? 48 : 32 },
     xAxis: {
@@ -57,7 +78,12 @@ function buildOption(config) {
       data: config.labels,
       axisLabel: { rotate: config.labels.length > 6 ? 30 : 0, fontSize: 11 }
     },
-    yAxis: { type: 'value', splitLine: { lineStyle: { type: 'dashed' } } },
+    yAxis: {
+      type: 'value',
+      name: unit ? `单位：${unit}` : '',
+      nameTextStyle: { fontSize: 11, color: '#6b7280' },
+      splitLine: { lineStyle: { type: 'dashed' } }
+    },
     series
   }
 }
@@ -105,6 +131,13 @@ onBeforeUnmount(() => {
   font-size: 13px;
   font-weight: 600;
   color: #374151;
+  margin-bottom: 4px;
+}
+
+.chart-subtitle {
+  font-size: 12px;
+  color: #6b7280;
+  line-height: 1.5;
   margin-bottom: 8px;
 }
 
